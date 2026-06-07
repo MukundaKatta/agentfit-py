@@ -155,8 +155,8 @@ def test_tail_keeps_most_recent():
 def test_tail_drops_oldest_first():
     msgs = [
         Message("user", "a" * 400),  # 100 tokens — old, gets dropped
-        Message("user", "b" * 40),   # 10 tokens
-        Message("user", "c" * 40),   # 10 tokens
+        Message("user", "b" * 40),  # 10 tokens
+        Message("user", "c" * 40),  # 10 tokens
     ]
     result = fit_messages(msgs, WindowConfig(max_tokens=25, strategy="tail"))
     assert all(m.role == "user" for m in result.messages)
@@ -201,7 +201,7 @@ def test_head_drops_newest_when_over_budget():
     msgs = [
         Message("user", "a" * 40),  # 10 tokens — kept
         Message("user", "b" * 40),  # 10 tokens — kept
-        Message("user", "c" * 400), # 100 tokens — dropped
+        Message("user", "c" * 400),  # 100 tokens — dropped
     ]
     result = fit_messages(msgs, WindowConfig(max_tokens=25, strategy="head"))
     contents = [m.content for m in result.messages]
@@ -213,8 +213,8 @@ def test_head_drops_newest_when_over_budget():
 def test_head_with_system_preserved():
     msgs = [
         Message("system", "a" * 40),  # 10 tokens — always kept
-        Message("user", "b" * 40),    # 10 tokens
-        Message("user", "c" * 400),   # 100 tokens — dropped
+        Message("user", "b" * 40),  # 10 tokens
+        Message("user", "c" * 400),  # 100 tokens — dropped
     ]
     result = fit_messages(msgs, WindowConfig(max_tokens=25, strategy="head"))
     assert result.messages[0].role == "system"
@@ -264,8 +264,8 @@ def test_middle_all_fit():
 def test_slide_contiguous_suffix():
     msgs = [
         Message("user", "a" * 400),  # 100 tokens — old
-        Message("user", "b" * 40),   # 10 tokens
-        Message("user", "c" * 40),   # 10 tokens
+        Message("user", "b" * 40),  # 10 tokens
+        Message("user", "c" * 40),  # 10 tokens
     ]
     result = fit_messages(msgs, WindowConfig(max_tokens=25, strategy="slide"))
     # b and c fit; a does not
@@ -284,7 +284,7 @@ def test_slide_full_window_fits():
 def test_slide_single_large_message_dropped():
     msgs = [
         Message("user", "a" * 400),  # 100 tokens
-        Message("user", "b" * 40),   # 10 tokens
+        Message("user", "b" * 40),  # 10 tokens
     ]
     result = fit_messages(msgs, WindowConfig(max_tokens=12, strategy="slide"))
     assert len(result.messages) == 1
@@ -294,8 +294,8 @@ def test_slide_single_large_message_dropped():
 def test_slide_with_system():
     msgs = [
         Message("system", "s" * 40),  # 10 tokens
-        Message("user", "a" * 400),   # 100 tokens — dropped
-        Message("user", "b" * 40),    # 10 tokens — fits
+        Message("user", "a" * 400),  # 100 tokens — dropped
+        Message("user", "b" * 40),  # 10 tokens — fits
     ]
     result = fit_messages(msgs, WindowConfig(max_tokens=25, strategy="slide"))
     roles = [m.role for m in result.messages]
@@ -338,10 +338,11 @@ def test_fit_result_dropped_accurate():
 def test_custom_tokenizer_word_count():
     def word_tok(s):
         return len(s.split())
+
     msgs = [
-        Message("user", "one two three four five"),       # 5 words
-        Message("user", "six seven eight nine ten"),      # 5 words
-        Message("user", "eleven twelve thirteen"),         # 3 words
+        Message("user", "one two three four five"),  # 5 words
+        Message("user", "six seven eight nine ten"),  # 5 words
+        Message("user", "eleven twelve thirteen"),  # 3 words
     ]
     cfg = WindowConfig(max_tokens=8, strategy="tail", tokenizer=word_tok)
     result = fit_messages(msgs, cfg)
@@ -353,6 +354,7 @@ def test_custom_tokenizer_word_count():
 def test_custom_tokenizer_char_count():
     def char_tok(s):
         return len(s)
+
     msgs = [
         Message("user", "hello"),  # 5 chars
         Message("user", "world"),  # 5 chars
@@ -361,3 +363,59 @@ def test_custom_tokenizer_char_count():
     result = fit_messages(msgs, cfg)
     assert len(result.messages) == 1
     assert result.messages[0].content == "world"
+
+
+def test_custom_tokenizer_applies_to_system_message():
+    # System message tokens must be measured with the config tokenizer too.
+    def char_tok(s):
+        return len(s)
+
+    msgs = [
+        Message("system", "sys"),  # 3 chars
+        Message("user", "hello"),  # 5 chars
+        Message("user", "world"),  # 5 chars
+    ]
+    cfg = WindowConfig(max_tokens=8, strategy="tail", tokenizer=char_tok)
+    result = fit_messages(msgs, cfg)
+    # system (3) is preserved → remaining 5 → only "world" fits
+    assert [m.content for m in result.messages] == ["sys", "world"]
+    assert result.total_tokens == 8
+
+
+# ---------------------------------------------------------------------------
+# Additional public-API coverage
+# ---------------------------------------------------------------------------
+
+
+def test_middle_preserves_chronological_order():
+    msgs = [Message("user", str(i), tokens=10) for i in range(6)]
+    result = fit_messages(msgs, WindowConfig(max_tokens=30, strategy="middle"))
+    contents = [m.content for m in result.messages]
+    # Keeps a head + tail slice, and the kept messages stay in order.
+    assert contents == sorted(contents, key=int)
+    assert contents[0] == "0"
+    assert contents[-1] == "5"
+
+
+def test_dropped_and_truncated_are_consistent():
+    msgs = [Message("user", "x", tokens=10) for _ in range(4)]
+    result = fit_messages(msgs, WindowConfig(max_tokens=15, strategy="tail"))
+    assert result.dropped == len(msgs) - len(result.messages)
+    assert result.truncated is (result.dropped > 0)
+
+
+def test_head_with_custom_tokenizer():
+    msgs = [
+        Message("user", "aa"),  # 2 chars
+        Message("user", "bb"),  # 2 chars
+        Message("user", "cccc"),  # 4 chars — overflows
+    ]
+    cfg = WindowConfig(max_tokens=4, strategy="head", tokenizer=len)
+    result = fit_messages(msgs, cfg)
+    assert [m.content for m in result.messages] == ["aa", "bb"]
+    assert result.dropped == 1
+
+
+def test_token_count_zero_for_whitespace_default_floor():
+    # 3 spaces → 3 // 4 == 0, but floor keeps it at 1 for non-empty text.
+    assert token_count("   ") == 1

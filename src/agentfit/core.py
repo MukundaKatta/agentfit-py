@@ -291,7 +291,12 @@ def _fit_slide(
 # ---------------------------------------------------------------------------
 
 
-_STRATEGIES: dict[Strategy, object] = {
+_StrategyFn = Callable[
+    [list[Message], list[Message], int, Callable[[str], int] | None, int],
+    FitResult,
+]
+
+_STRATEGIES: dict[Strategy, _StrategyFn] = {
     "head": _fit_head,
     "tail": _fit_tail,
     "middle": _fit_middle,
@@ -337,8 +342,7 @@ def fit_messages(
         raise ValueError(f"max_tokens must be positive, got {config.max_tokens}")
     if config.strategy not in _STRATEGIES:
         raise ValueError(
-            f"Unknown strategy {config.strategy!r}. "
-            f"Choose from: {sorted(_STRATEGIES)}"
+            f"Unknown strategy {config.strategy!r}. Choose from: {sorted(_STRATEGIES)}"
         )
 
     if not messages:
@@ -351,5 +355,5 @@ def fit_messages(
 
     system, rest = _split_system(messages, config.preserve_system)
     original_count = len(messages)
-    fn = _STRATEGIES[config.strategy]  # type: ignore[index]
-    return fn(system, rest, config.max_tokens, config.tokenizer, original_count)  # type: ignore[operator]
+    fn = _STRATEGIES[config.strategy]
+    return fn(system, rest, config.max_tokens, config.tokenizer, original_count)
