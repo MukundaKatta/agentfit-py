@@ -92,7 +92,7 @@ pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
-40 tests. Covers all four strategies, edge cases, custom tokenizers, system-message preservation, pre-computed tokens, and `FitResult` metadata.
+42 tests. Covers all four strategies, edge cases, custom tokenizers, system-message preservation, pre-computed tokens, and `FitResult` metadata.
 
 ## License
 

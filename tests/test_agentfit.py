@@ -256,6 +256,34 @@ def test_middle_all_fit():
     assert len(result.messages) == 4
 
 
+def test_middle_oversized_head_does_not_starve_tail():
+    # An oversized message at the head must not prevent the tail from being
+    # filled up to budget (and vice-versa). Regression for a bug where the
+    # two-pointer loop broke entirely as soon as one end overflowed.
+    msgs = [
+        Message("user", "HUGE", tokens=1000),  # never fits — must be dropped
+        Message("user", "s1", tokens=5),
+        Message("user", "s2", tokens=5),
+        Message("user", "s3", tokens=5),
+    ]
+    result = fit_messages(msgs, WindowConfig(max_tokens=20, strategy="middle"))
+    assert [m.content for m in result.messages] == ["s1", "s2", "s3"]
+    assert result.total_tokens == 15
+    assert result.dropped == 1
+
+
+def test_middle_oversized_tail_does_not_starve_head():
+    msgs = [
+        Message("user", "s1", tokens=5),
+        Message("user", "s2", tokens=5),
+        Message("user", "s3", tokens=5),
+        Message("user", "HUGE", tokens=1000),  # never fits — must be dropped
+    ]
+    result = fit_messages(msgs, WindowConfig(max_tokens=20, strategy="middle"))
+    assert [m.content for m in result.messages] == ["s1", "s2", "s3"]
+    assert result.dropped == 1
+
+
 # ---------------------------------------------------------------------------
 # slide strategy
 # ---------------------------------------------------------------------------

@@ -210,33 +210,39 @@ def _fit_middle(
             budget_tokens=budget,
         )
 
-    # Two-pointer: grow from both ends
+    # Two-pointer: grow from both ends.  A message that is too big to fit at
+    # one end stops further growth *at that end only* — we keep trying the
+    # other end so that a single oversized head (or tail) message cannot
+    # starve the opposite side out of the result.
     lo, hi = 0, len(rest) - 1
     head_msgs: list[Message] = []
     tail_msgs: list[Message] = []
     head_tokens = tail_tokens = 0
+    head_open = tail_open = True
 
-    while lo <= hi:
+    while lo <= hi and (head_open or tail_open):
         # Try head
-        t_head = rest[lo].count_tokens(tok)
-        t_tail = rest[hi].count_tokens(tok) if lo != hi else 0
-
-        if head_tokens + tail_tokens + t_head <= remaining:
-            head_msgs.append(rest[lo])
-            head_tokens += t_head
-            lo += 1
-        else:
-            break
+        if head_open:
+            t_head = rest[lo].count_tokens(tok)
+            if head_tokens + tail_tokens + t_head <= remaining:
+                head_msgs.append(rest[lo])
+                head_tokens += t_head
+                lo += 1
+            else:
+                head_open = False
 
         if lo > hi:
             break
 
-        if head_tokens + tail_tokens + t_tail <= remaining:
-            tail_msgs.insert(0, rest[hi])
-            tail_tokens += t_tail
-            hi -= 1
-        else:
-            break
+        # Try tail
+        if tail_open:
+            t_tail = rest[hi].count_tokens(tok)
+            if head_tokens + tail_tokens + t_tail <= remaining:
+                tail_msgs.insert(0, rest[hi])
+                tail_tokens += t_tail
+                hi -= 1
+            else:
+                tail_open = False
 
     kept = head_msgs + tail_msgs
     result = system + kept
