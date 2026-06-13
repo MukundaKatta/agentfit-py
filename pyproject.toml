@@ -35,7 +35,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.4"]
+dev = ["pytest>=9.0.3", "ruff>=0.4"]
 tiktoken = ["tiktoken>=0.6"]
 
 [project.urls]
